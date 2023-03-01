@@ -178,12 +178,13 @@ class Account(_Signature):
         account_type = {
             'spot': 1,
             'margin': 5,
-            'funding': 6
+            'funding': 6,
+			'trading': 18,
         }
         #return pd.DataFrame(account_type, index=[0])
         return account_type
 
-    def get_withdrwal_status(self):
+    def get_withdrawal_status(self):
         r"""Returns a dictionary of the withdrawal status and the
         numerical code that corresponds to them in okcoin.
 
@@ -215,7 +216,7 @@ class Account(_Signature):
         #return pd.DataFrame(withdrawal_status, index=[0])
         return withdrawal_status
 
-    def get_wallet(self):
+    def get_balance(self, currency=''):
         r"""Retrieves information on the balances of all of the assets that are
         available or on hold.
 
@@ -238,10 +239,13 @@ class Account(_Signature):
         0    0.00071305    0.00071305      BTC  0.00000000
         1  793.99043577  793.99043577      STX  0.00000000
         """
-        request_path = '/api/account/v3/wallet'
-        #body = ''
+        if currency:
+            request_path = '/api/v5/account/balance?ccy='+currency
+        else:
+            request_path = '/api/v5/account/balances'
+		#body = ''
 
-        #resp = _AccountInfo(self.query(GET, request_path, body))
+        #resp = _AccountInfo(self.query(GET, request_path))
 
         #fig = go.Figure([go.Bar(x=resp.df['currency'].tolist(), y=resp.df['balance'].tolist())])
         #fig.update_layout(
@@ -251,7 +255,7 @@ class Account(_Signature):
 
         return _AccountInfo(self.query(GET, request_path)) #, fig
 
-    def get_asset_valuation(self, currency='BTC'):
+    def get_asset_valuation(self, currency=''):
         r"""Get the valuation of the total assets of the account in btc or fiat currency.
 
         Parameters
@@ -275,10 +279,12 @@ class Account(_Signature):
         valuation_currency                       USD
         timestamp           2021-05-13T02:21:30.061Z
         """
-        request_path = '/api/account/v3/asset-valuation'
-        body = {'valuation_currency': currency}
+        if currency:
+            request_path = '/api/v5/asset/asset-valuation?ccy='+currency
+        else:
+            request_path = '/api/v5/asset/asset-valuation'
 
-        return _Resp(self.query(GET, request_path, body))
+        return _Resp(self.query(GET, request_path))
 
     # Sub account erroring
     def get_sub_account(self, account_name=''):
@@ -331,14 +337,13 @@ class Account(_Signature):
             }
         }
         """
-        request_path = '/api/account/v3/sub-account'
         if account_name:
-            body = {'sub-account':account_name}
+            request_path = '/api/v5/users/subaccount/list'+account_name
 
         else:
-            body = {'sub-account': ''}
+            request_path = '/api/v5/users/subaccount/list'
 
-        return _Resp(self.query(GET, request_path, body))
+        return _Resp(self.query(GET, request_path))
 
     def get_currency(self, token='BTC'):
         r""" Retrieves information for a single token in your account,
@@ -362,33 +367,38 @@ class Account(_Signature):
               balance   available currency        hold
         0  0.00076409  0.00076409      BTC  0.00000000
         """
-        request_path = '/api/account/v3/wallet/' + token
+        request_path = '/api/account/v5/wallet/' + token
         return _Resp(self.query(GET, request_path))
 
     ## Withdraw or Trade Permission
-    def get_funds_transfer(self):
-        r"""This request supports the transfer of funds among your funding account,
-        trading accounts, main account, and sub accounts.
+    def get_funds_transfer(self, ccy='BTC', amt='', origin='', destination=''):
+        body = {'ccy': ccy,
+                  'amt': amt,
+                  'from': origin,
+                  'to': destination}
+        request_path = '/api/v5/asset/transfer'
+        return _Resp(self.query(POST, request_path, body=body))
 
-        Returns
-        -------
-        success : bool
-
-        Examples
-        --------
-        >>>
-        """
-        pass
+    def get_funds_transfer_state(self, transId='3693307', clientId=''):
+        str(transId)
+        print(transId,clientId)
+        if transId:
+            request_path = '/api/v5/asset/transfer-state?transId='+transId
+        if clientId:
+            request_path = '/api/v5/asset/transfer-state?clientId='+clientId
+        else:
+            request_path = '/api/v5/asset/transfer-state?transId=3693314'	
+        print(request_path)
+        return _Resp(self.query(GET, request_path))
 
     ## Withdraw or Trade Permission
-    def withdraw(self, currency, amount, destination, to_address, trade_pwd, fee):
-        body = {'currency': currency,
-                  'amount': amount,
-                  'destination': destination,
-                  'to_address': to_address,
-                  'trade_pwd': trade_pwd,
+    def withdraw(self, currency='', amount='', to_address='', fee=''):
+        body = {'ccy': currency,
+                  'amt': amount,
+                  'destination': '4',
+                  'toAddr': to_address,
                   'fee': fee}
-        request_path = '/api/account/v3/withdrawal'
+        request_path = '/api/v5/asset/withdrawal'
         return _Resp(self.query(POST, request_path, body=body))
 
     def get_withdrawal_history(self, currency=''):
@@ -414,9 +424,9 @@ class Account(_Signature):
         Index: []
         """
         if currency:
-            request_path = '/api/account/v3/withdrawal/history/' + currency.lower()
+            request_path = '/api/v5/asset/withdrawal-history?ccy=' + currency
         else:
-            request_path = '/api/account/v3/withdrawal/history'
+            request_path = '/api/v5/asset/withdrawal-history'
         return _Resp(self.query(GET, request_path))
 
     def get_ledger(self):
@@ -440,7 +450,7 @@ class Account(_Signature):
         3      0.00001777    0.00074001  ...                      2021-05-13T04:41:27.000Z
         [4 rows x 7 columns]
         """
-        request_path = '/api/account/v3/ledger'
+        request_path = '/api/account/v5/ledger'
         ledger_resp = _Resp(self.query(GET, request_path))
         ledger_resp.df.amount = ledger_resp.df.amount.astype('float64')
         ledger_resp.df.balance = ledger_resp.df.balance.astype('float64')
@@ -475,7 +485,8 @@ class Account(_Signature):
          'msg': 'Not Found'}
         """
 
-        request_path = '/api/account/v3/deposit/address/' + currency.lower()
+        request_path = '/api/v5/asset/deposit-address?ccy=' + currency
+        print(request_path)
         return _Resp(self.query(GET, request_path))
 
 
@@ -500,7 +511,7 @@ class Account(_Signature):
 
         Examples
         --------
-        >>> dep_value = acc.get_total_deposit_value('2021-04-12','2021-06-12')
+        >>> ddep_value = acc.get_total_deposit_value('2021-04-12','2021-06-12')
         >>> print(dep_value)
             400.00
         """
@@ -547,7 +558,7 @@ class Account(_Signature):
         3  100.00000000  2021-04-12T15:40:51.000Z  ...  2021-04-09T12:22:16.000Z      5
         [4 rows x 9 columns]
         """
-        request_path = '/api/account/v3/deposit/history/'+currency.lower()
+        request_path = '/api/v5/asset/deposit-history?ccy='+currency
 
         return _Resp(self.query(GET, request_path))
 
@@ -567,7 +578,7 @@ class Account(_Signature):
         0             0                US Dollar  ...           1
         1             0                     Euro  ...           1
         """
-        request_path = '/api/account/v3/currencies'
+        request_path = '/api/v5/asset/currencies'
         return _Resp(self.query(GET, request_path))
 
 
@@ -593,9 +604,9 @@ class Account(_Signature):
         min_fee     currency     max_fee
         0  1.00000000      STX  2.00000000
         """
-        request_path = '/api/account/v3/withdrawal/fee'
+        request_path = '/api/v5/asset/withdrawal/fee'
         if currency:
-            body = {'currency':currency.lower()}
+            body = {'currency':currency}
         else:
             body=''
         #body = json.dumps(p)
@@ -646,7 +657,11 @@ class Account(_Signature):
             yaxis_title="Value in " + currency)
 
         return balance, fig
-
+		
+		
+    def lightning_deposit(self, amount):
+        request_path = '/api/v5/asset/deposit-lightning?ccy=BTC&amt='+str(amount)
+        return _Resp(self.query(GET, request_path))
 
 ## Spot Trading Account Info
 class Spot(_Signature):
@@ -710,7 +725,7 @@ class Spot(_Signature):
         #return pd.DataFrame(order_status, index=[0])
         return order_status
 
-    def get_accounts(self, currency=None):
+    def get_accounts(self, currency='BTC'):
         r""" Returns a list of assets, (with non-zero balance),
         remaining balance, and amount available in the spot trading account.
 
@@ -732,21 +747,17 @@ class Spot(_Signature):
         >>> accounts = spot.get_accounts()
         >>> accounts[1].write_html('temp.html', auto_open=True)
         """
-        request_path = '/api/spot/v3/accounts'
+        request_path = '/api/v5/account/balance'
         if currency:
-            request_path += "/" + currency.lower()
+            request_path + "?ccy=" + currency
 
         resp = _Resp(self.query(GET, request_path))
 
-        fig = go.Figure([go.Bar(x=resp.df['currency'].tolist(), y=resp.df['balance'].tolist())])
-        fig.update_layout(
-            title='Spot Trading Account Assets',
-            yaxis_title='Asset',
-            xaxis_title='Quantity')
 
-        return resp, fig
 
-    def get_ledger(self, currency='BTC'):
+        return resp
+
+    def get_bills(self, currency=''):
         r""" Returns the spot account bills dating back the past 3 months.
         Pagination is supported and the response is sorted
         with most recent first in reverse chronological order.
@@ -766,19 +777,37 @@ class Spot(_Signature):
         >>> currency = spot.get_ledger('USD')
         >>> currency.df
         """
-        request_path = '/api/spot/v3/accounts'
-        request_path += "/" + currency.lower() + "/ledger"
+        request_path = '/api/v5/account/bills'
+        if currency:
+            request_path + '?ccy=' + currency
+        return _Resp(self.query(GET, request_path))
+		
+    def get_bills_archive(self, currency=''):
+        r""" Returns the spot account bills dating back the past 3 months.
+        Pagination is supported and the response is sorted
+        with most recent first in reverse chronological order.
+
+        Parameters
+        ----------
+        currency : 	str
+            Currency being queried
+
+        Returns
+        -------
+        balance : _Resp
+            A query response opbect that contains the query result as a dictionary and as a dataframe
+
+        Examples
+        --------
+        >>> currency = spot.get_ledger('USD')
+        >>> currency.df
+        """
+        request_path = '/api/v5/account/bills-archive'
+        if currency:
+            request_path + '?ccy=' + currency
         return _Resp(self.query(GET, request_path))
 
-    def place_order(self,
-                    side='buy',
-                    trading_pair='STX-USD',
-                    order_type='0',
-                    limit_or_market='limit',
-                    size='',
-                    price='',
-                    amount_to_spend='',
-                    client_id=''):
+    def place_order(self, side='', trading_pair='', limit_or_market='', size='', price='', client_id=''):
         r""" Returns This the list of your orders from
         the most recent 3 months. This request supports paging
         and is stored according to the order time in chronological
@@ -792,15 +821,11 @@ class Spot(_Signature):
         trading_pair : str
             The trading pair that was ordered
 
-        order_type='0',
-            Specify 0: Normal order (Unfilled and 0 imply normal limit order) 1:
-            Post only 2: Fill or Kill 3: Immediate Or Cancel
-
         limit_or_market : str
             'limit' or 'market' order
 
         size : float
-            Quantity to be sold. Required for market sells or limit buys.
+            Quantity to be bought or sold.
 
         price : float
             The price you want to purchase the asset at
@@ -822,25 +847,26 @@ class Spot(_Signature):
         >>> order = spot.place_order('buy', 'MIA-USD','0','limit',1000, .04)
         >>> order.df
         """
-        request_path = '/api/spot/v3/orders'#?instrument_id='+trading_pair+'&state='+str(state)
+        request_path = '/api/v5/trade/order'#?instrument_id='+trading_pair+'&state='+str(state)
         # Using the "body" doesn't work
 
         if limit_or_market == 'market':
-            body = {'side': side,
-                 'instrument_id': trading_pair,
-                 'order_type': order_type,
+            body = {'instId': trading_pair,
+                 'tdMode':"cash",
+				 'clOrdId': client_id,
+                 'side': side,
+                 'ordType': limit_or_market,
                  'type': 'market',
-                 'size':str(size),
-                 'notional': str(amount_to_spend),
-                 'client_id': client_id}
+                 'sz':str(size)}
         else:
-            body = {'side':side,
-                'instrument_id':trading_pair,
-                'order_type':order_type,
-                'type':'limit',
-                'size':str(size),
-                'price': str(price),
-                'client_id':client_id}
+            body = {'instId': trading_pair,
+                 'tdMode':"cash",
+				 'clOrdId': client_id,
+                 'side': side,
+                 'ordType': limit_or_market,
+                 'type': 'limit',
+                 'sz':str(size),
+                 'px':str(price)}
 
         return _Resp(self.query(POST, request_path, body=body))
 
@@ -866,7 +892,7 @@ class Spot(_Signature):
                 >>> order = spot.cancel_order('5468800', 'MIA-USD')
                 >>> order.df
                 """
-        request_path = '/api/spot/v3/cancel_orders'#?instrument_id='+trading_pair+'&state='+str(state)
+        request_path = '/api/spot/v5/cancel_orders'#?instrument_id='+trading_pair+'&state='+str(state)
         body = {'instrument_id': trading_pair.lower()}
 
         return _Resp(self.query(POST, request_path + '/' + str(order_id), body=body))
@@ -896,7 +922,7 @@ class Spot(_Signature):
         >>> orders = spot.get_order_list('STX-USD')
         >>> orders.df
         """
-        request_path = '/api/spot/v3/orders'#?instrument_id='+trading_pair+'&state='+str(state)
+        request_path = '/api/spot/v5/orders'#?instrument_id='+trading_pair+'&state='+str(state)
         body = {'instrument_id': trading_pair,
                 'state': str(state)}
         return _Resp(self.query(GET, request_path, body=body))
@@ -923,7 +949,7 @@ class Spot(_Signature):
         >>> pending = spot.get_orders_pending('STX-USD')
         >>> pending.df
         """
-        request_path = '/api/spot/v3/orders_pending'
+        request_path = '/api/spot/v5/orders_pending'
         body = {'instrument_id':trading_pair.lower()}
         return _Resp(self.query(GET, request_path, body=body))
 
@@ -952,11 +978,11 @@ class Spot(_Signature):
         >>> details = spot.get_order_details(order_id, 'BTC-USD')
         >>> details.df
         """
-        request_path = '/api/spot/v3/orders/' + str(order_id)
+        request_path = '/api/spot/v5/orders/' + str(order_id)
         body = {'instrument_id': trading_pair.lower()}
         return _Resp(self.query(GET, request_path, body=body))
 
-    def get_trade_fee(self):
+    def get_trade_fee(self,instType='SPOT'):
         r""" Returns the transaction fee rate corresponding to
         your current account transaction level. The sub-account
         rate under the parent account
@@ -975,7 +1001,7 @@ class Spot(_Signature):
         >>> fees.json
         {'category': '1', 'maker': '0.001', 'taker': '0.002', 'timestamp': '2021-06-11T02:41:44.149Z'}
         """
-        request_path = '/api/spot/v3/trade_fee'
+        request_path = '/api/v5/account/trade-fee?instType='+instType
         return _Resp(self.query(GET, request_path))
 
     def get_filled_orders(self, trading_pair='BTC-USDT'):
@@ -1004,7 +1030,7 @@ class Spot(_Signature):
         0   2021-04-02T15:20:37.000Z      USD  ...  2021-04-02T15:20:37.000Z   103932
         1   2021-04-02T15:20:37.000Z      BTC  ...  2021-04-02T15:20:37.000Z   103932
         """
-        request_path = '/api/spot/v3/fills'
+        request_path = '/api/spot/v5/fills'
         body = {'instrument_id': trading_pair.lower()}
         return _Resp(self.query(GET, request_path, body=body))
 
@@ -1058,7 +1084,7 @@ class Earn(_Signature):
         0                         50.00000000  ...               0.1000        stacks
         [1 rows x 10 columns]
         """
-        request_path = '/api/earning/v3/offers'
+        request_path = '/api/earning/v5/offers'
         body = {'investment_currency': investment_currency.upper(),
                 'protocol_name': protocol_name}
         return _Resp(self.query(GET, request_path, body=body))
@@ -1091,7 +1117,7 @@ class Earn(_Signature):
         >>> deposit = earn.get_offers("STX", "stacks", 100, 12)
         >>> deposit.df
         """
-        request_path = '/api/earning/v3/purchase'
+        request_path = '/api/earning/v5/purchase'
         body = {'investment_currency': investment_currency.upper(),
                 'protocol_name': protocol_name.lower(),
                 'amount':str(amount),
@@ -1116,7 +1142,7 @@ class Earn(_Signature):
         >>> order = earn.cancel("1234")
         >>> order.df
         """
-        request_path = '/api/earning/v3/cancel'
+        request_path = '/api/earning/v5/cancel'
         body = {'order_id': str(order_id)}
         return _Resp(self.query(POST, request_path, body=body))
 
@@ -1142,7 +1168,7 @@ class Earn(_Signature):
         >>> positions = earn.get_positions("STX", "stacks")
         >>> positions.df
         """
-        request_path = '/api/earning/v3/positions'
+        request_path = '/api/earning/v5/positions'
         body = {'investment_currency': investment_currency.upper(),
                 'protocol_name': protocol_name}
         return _Resp(self.query(GET, request_path, body=body))
@@ -1172,7 +1198,7 @@ class Earn(_Signature):
         >>> orders = earn.get_positions("STX", "stacks")
         >>> orders.df
         """
-        request_path = '/api/earning/v3/orders'
+        request_path = '/api/earning/v5/orders'
         if investment_currency:
             body = {'investment_currency': investment_currency.upper()}
         elif investment_currency and protocol_name:
@@ -1214,7 +1240,7 @@ class Earn(_Signature):
         >>> redeem = earn.redeem_order("oid1234",True)
         >>> redeem.df
         """
-        request_path = '/api/earning/v3/redeem'
+        request_path = '/api/earning/v5/redeem'
 
         if type(order_id) == str:
             body = [{'order_id': order_id,
@@ -1289,7 +1315,7 @@ class Fiat(_Signature):
         --------
         >>>
         """
-        request_path = '/api/account/v3/fiat/deposit/details'
+        request_path = '/api/v5/asset/deposit-history'
         return _Resp(self.query(GET, request_path))
 
     def get_channel_info(self):
@@ -1311,7 +1337,7 @@ class Fiat(_Signature):
         --------
         >>>
         """
-        request_path = '/api/account/v3/fiat/channel'
+        request_path = '/api/account/v5/fiat/channel'
         return _Resp(self.query(GET, request_path))
 
     def get_withdrawal_history(self):
@@ -1333,5 +1359,5 @@ class Fiat(_Signature):
         --------
         >>>
         """
-        request_path = '/api/account/v3/fiat/withdraw/details'
-        return _Resp(self.query(GET, request_path))
+        request_path = '/api/account/v5/fiat/withdraw/details'
+        return __Resp(self.query(GET, request_path))
